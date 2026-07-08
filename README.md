@@ -17,12 +17,12 @@ The typical workflow is:
 4. Optionally apply projection-domain phase retrieval or material decomposition.
 5. Reconstruct CT images with iterative approach or FBP.
 
-Examples are shown in `main.ipynb`, which demonstrates how to string modules and functions together.
+Examples are shown in `example.ipynb`, which demonstrates how to string modules and functions together.
 
 
 ## File summary
 
-* `main.ipynb` — Example usage notebook.
+* `example.ipynb` — Example usage notebook.
 * `forward.py` — JAX forward models for 1D propagation-based X-ray phase-contrast CT simulations.
 * `materials.py` — Material definitions and helpers for computing refractive indices and physical constants.
 * `nist_xcom.py` — NIST XCOM material and element definitions (used by `materials.py`).
