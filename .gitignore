@@ -1,3 +1,17 @@
+.DS_Store
+.ipynb_checkpoints/
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+uv.lock
+inputs/
+outputs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
