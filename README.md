@@ -39,12 +39,12 @@ Examples are shown in `example.ipynb`, which demonstrates how to string modules 
 import jax.numpy as jnp
 
 from xpc_ct.materials import make_materials
-from xpc_ct.forward import ProjApproxPBI_1D
+from xpc_ct.forward import ProjApproxPBI
 from xpc_ct.tomography import get_recon
 
 materials = make_materials(('water', 'bone'))  
 
-fwd_model = ProjApproxPBI_1D(
+fwd_model = ProjApproxPBI(
     material_names=('water', 'bone'),
     energies=jnp.array([14.0]),
     thetas=jnp.linspace(0, jnp.pi, 180, endpoint=False),
