@@ -77,7 +77,8 @@ def tie_matdecomp(
     propdist,
     dx,
     basis_materials,
-    I0=1.0
+    I0=1.0,
+    rcond=0.0
 ):
     """
     Linearized TIE/PBI material-decomposition solver (Schaff et al. 2020)
@@ -140,10 +141,11 @@ def tie_matdecomp(
     ATb = np.einsum('xycm,caxy->axym', A, b)
 
     # Solve for material thickness Fourier coefficients.
+    A_pinv = np.linalg.pinv(A, rcond=rcond)
     xF = np.einsum(
-        'xymn,axyn->axym',
-        np.linalg.pinv(ATA),
-        ATb,
+        'xymc,caxy->axym',
+        A_pinv,
+        b,
     )
 
     Ts = np.real(np.fft.ifftn(xF, axes=(1, 2)))
@@ -152,3 +154,103 @@ def tie_matdecomp(
     return jnp.asarray(Ts, dtype=jnp.float32)
 
 
+def beltran_pr(
+    data,
+    energy,
+    propdist,
+    dx,
+    total_thickness,
+    materials,
+    I0=1.0
+):
+    """
+    Beltran generalization of Paganin's method for multi-material phase retrieval from a single image. Requires knowledge of total thickness of the object.
+
+    Parameters
+    ----------
+    data : array
+        Propagation-based image data, shape (N_angles, Nx, Ny).
+
+    energy : float
+        Energy in keV.
+
+    propdist : float
+        Propagation distance in meters.
+
+    dx : float
+        Pixel size in meters.
+
+    total_thickness : array
+        Total projected object thickness in meters. Must broadcast to the
+        shape of `data`.
+
+    materials : sequence
+        Material objects. The first material is the encasing material and
+        all remaining materials are treated as embedded materials.
+
+    I0 : float or array
+        Data normalization factor.
+
+    Returns
+    -------
+    Ts : jnp.ndarray
+        Retrieved material thickness maps, shape
+        (N_materials, N_angles, Nx, Ny). The first map is the residual
+        encasing-material thickness.
+    """
+
+    data = np.asarray(data, dtype=np.float64) / I0
+
+    if data.ndim != 3:
+        raise ValueError(
+            f'data must have shape (N_angles, Nx, Ny), got shape {data.shape}.'
+        )
+
+    if len(materials) < 2:
+        raise ValueError('materials must contain an encasing material and at least one embedded material.')
+
+    try:
+        A = np.broadcast_to(
+            np.asarray(total_thickness, dtype=np.float64),
+            data.shape,
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f'total_thickness must broadcast to data shape {data.shape}.'
+        ) from exc
+
+    _, Nx, Ny = data.shape
+
+    delta, _ = basis_delta_beta(materials, energy)
+    mu = basis_mu(materials, energy)
+
+    delta = delta[0]
+    mu = mu[0]
+
+    ddelta = delta[1:] - delta[0]
+    dmu = mu[1:] - mu[0]
+
+    if np.any(np.isclose(dmu, 0.0)):
+        raise ValueError('Embedded and encasing materials must have different attenuation coefficients.')
+
+    fx = np.fft.fftfreq(Nx, d=dx)
+    fy = np.fft.fftfreq(Ny, d=dx)
+    f2 = fx[:, None]**2 + fy[None, :]**2
+
+    H = 1 / (1 + (4 * np.pi**2 * propdist * f2[:, :, None] * ddelta) / dmu)
+
+    rhs = data * np.exp(mu[0] * A)
+
+    q = np.fft.ifftn(
+        np.fft.fftn(rhs, axes=(1, 2))[..., None] * H[None, ...],
+        axes=(1, 2),
+    )
+
+    q = np.maximum(np.real(q), np.finfo(np.float64).tiny)
+    T_embedded = -np.log(q) / dmu
+    T_embedded = np.moveaxis(T_embedded, -1, 0)
+
+    T_encasing = A - np.sum(T_embedded, axis=0)
+    Ts = np.concatenate([T_encasing[None, ...], T_embedded], axis=0)
+
+    return jnp.asarray(Ts, dtype=jnp.float32)
