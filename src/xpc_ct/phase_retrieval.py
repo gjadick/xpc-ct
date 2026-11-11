@@ -20,7 +20,7 @@ def paganin_pr(
     Parameters
     ----------
     data : array
-        Image data in counts/normalized counts, shape (N_angles, Nx, Ny).
+        Image data in counts/normalized counts, shape (N_angles, Ny, Nx).
 
     energy : float
         Energy in keV.
@@ -40,15 +40,15 @@ def paganin_pr(
     Returns
     -------
     T : jnp.ndarray
-        Retrieved projected thickness, shape (N_angles, Nx, Ny).
+        Retrieved projected thickness, shape (N_angles, Ny, Nx).
     """
 
     data = np.asarray(data, dtype=np.float64) / I0
     
     if data.ndim != 3:
-        raise ValueError(f'data must have shape (N_angles, Nx, Ny), got shape {data.shape}.')
+        raise ValueError(f'data must have shape (N_angles, Ny, Nx), got shape {data.shape}.')
     
-    N_angles, Nx, Ny = data.shape
+    N_angles, Ny, Nx = data.shape
 
     delta, _ = material.delta_beta(energy)
     mu = material.mu(energy)
@@ -71,7 +71,7 @@ def paganin_pr(
     return jnp.asarray(T, dtype=jnp.float32)
 
 
-def tie_matdecomp(
+def schaff_md(
     data,
     energies,
     propdist,
@@ -86,7 +86,7 @@ def tie_matdecomp(
     Parameters
     ----------
     data : array
-        Image data in counts/normalized counts, shape (N_bins, N_angles, Nx, Ny).
+        Image data in counts/normalized counts, shape (N_bins, N_angles, Ny, Nx).
 
     energies : array
         Energies in keV, shape (N_bins,).
@@ -106,16 +106,16 @@ def tie_matdecomp(
     Returns
     -------
     Ts : jnp.ndarray
-        Material thickness maps, shape (N_materials, N_angles, Nx, Ny).
+        Material thickness maps, shape (N_materials, N_angles, Ny, Nx).
     """
 
-    data = np.asarray(data, dtype=np.float64)
+    data = np.asarray(data, dtype=np.float64) / I0
     energies = np.asarray(energies, dtype=np.float64)
 
     if data.ndim != 4:
-        raise ValueError(f'data must have shape (N_bins, N_angles, Nx, Ny), got shape {data.shape}.')
+        raise ValueError(f'data must have shape (N_bins, N_angles, Ny, Nx), got shape {data.shape}.')
 
-    N_bins, N_angles, Nx, Ny = data.shape
+    N_bins, N_angles, Ny, Nx = data.shape
     n_materials = len(basis_materials)
 
     delta, _ = basis_delta_beta(basis_materials, energies)
@@ -169,7 +169,7 @@ def beltran_pr(
     Parameters
     ----------
     data : array
-        Propagation-based image data, shape (N_angles, Nx, Ny).
+        Propagation-based image data, shape (N_angles, Ny, Nx).
 
     energy : float
         Energy in keV.
@@ -195,7 +195,7 @@ def beltran_pr(
     -------
     Ts : jnp.ndarray
         Retrieved material thickness maps, shape
-        (N_materials, N_angles, Nx, Ny). The first map is the residual
+        (N_materials, N_angles, Ny, Nx). The first map is the residual
         encasing-material thickness.
     """
 
@@ -203,7 +203,7 @@ def beltran_pr(
 
     if data.ndim != 3:
         raise ValueError(
-            f'data must have shape (N_angles, Nx, Ny), got shape {data.shape}.'
+            f'data must have shape (N_angles, Ny, Nx), got shape {data.shape}.'
         )
 
     if len(materials) < 2:
@@ -219,7 +219,7 @@ def beltran_pr(
             f'total_thickness must broadcast to data shape {data.shape}.'
         ) from exc
 
-    _, Nx, Ny = data.shape
+    _, Ny, Nx = data.shape
 
     delta, _ = basis_delta_beta(materials, energy)
     mu = basis_mu(materials, energy)
