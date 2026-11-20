@@ -83,6 +83,12 @@ class Material:
         Energy grid [keV] used to precompute delta and beta.
     dtype:
         JAX dtype for precomputed JAX lookup arrays.
+    attenuation:
+        Which interactions beta (and therefore mu = 2 k beta) accounts for.
+        'total' (default): photoelectric + Compton + Rayleigh, from the
+        tabulated total attenuation coefficient. 'photo': photoelectric
+        absorption only, i.e. the beta returned by xraydb.xray_delta_beta().
+        Results generated before November 2026 used 'photo'.
 
     Notes
     -----
@@ -98,6 +104,7 @@ class Material:
     E_max: float = 100.0
     dE: float = 1.0
     dtype: Any = jnp.float32
+    attenuation: str = 'total'
 
     energy_grid: np.ndarray = field(init=False, repr=False)
     delta_grid: np.ndarray = field(init=False, repr=False)
@@ -114,6 +121,11 @@ class Material:
 
         if self.formula is None:
             self.formula = mass_fractions_to_formula(self.mass_fractions)
+
+        if self.attenuation not in ('total', 'photo'):
+            raise ValueError(
+                f"attenuation must be 'total' or 'photo', got {self.attenuation!r}."
+            )
 
         self.energy_grid = np.arange(self.E_min, self.E_max + self.dE, self.dE)
         self.delta_grid, self.beta_grid = self._delta_beta_xraydb(self.energy_grid)
@@ -146,9 +158,25 @@ class Material:
         delta, beta:
             numpy arrays containing refractive-index decrement and absorption
             component.
+
+        Notes
+        -----
+        The beta returned by xraydb.xray_delta_beta() is built from the
+        Chantler f2 scattering factor and covers photoelectric absorption
+        only. For attenuation='total', beta is instead defined from the
+        tabulated total attenuation coefficient as beta = mu_total / (2 k),
+        so that scattering out of the primary beam is included.
         """
-        E_eV = 1e3 * np.asarray(E_keV, dtype=float)
+        E_keV = np.asarray(E_keV, dtype=float)
+        E_eV = 1e3 * E_keV
         delta, beta, _ = xraydb.xray_delta_beta(self.formula, self.density, E_eV)
+
+        if self.attenuation == 'total':
+            mu_total = 100.0 * xraydb.material_mu(
+                self.formula, E_eV, density=self.density, kind='total'
+            )  # [1/cm] -> [1/m]
+            beta = mu_total / (2 * wavenumber(E_keV))
+
         return np.asarray(delta), np.asarray(beta)
 
     def delta_beta(self, E_keV):
